@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Cifrado César - Minimalista Neon (Corregido)</title>
+<style>
+  :root{
+    --bg-dark:#0f0f10;
+    --card:#121217;
+    --muted:#9aa4b2;
+    --neon-a:#00eaff;
+    --neon-b:#ff33d4;
+  }
+
+  /* ====== Reset y base ====== */
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    color: #e6eef6;
+    background: var(--bg-dark);
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:36px 18px;
+    position:relative; /* para que ::before esté relativo a la ventana */
+    overflow-x:hidden;
+  }
+
+  /* ====== MANCHAS DE COLOR ANIMADAS (fondo) ======
+     Usamos ::before fijo, con radial-gradients y transform animado.
+     Esto funciona sin imágenes y no necesita JS. */
+  body::before{
+    content:"";
+    position:fixed;
+    inset: -10% -10% -10% -10%; /* algo más grande para que la animación no recorte */
+    z-index:0;
+    pointer-events:none;
+    background:
+      radial-gradient(closest-side at 15% 25%, rgba(255,0,120,0.30), transparent 40%),
+      radial-gradient(closest-side at 80% 60%, rgba(0,200,255,0.30), transparent 42%),
+      radial-gradient(closest-side at 50% 85%, rgba(255,180,0,0.26), transparent 40%);
+    filter: blur(36px) saturate(110%);
+    transform: translate3d(0,0,0) scale(1);
+    animation: blobsMove 1.8s ease-in-out infinite alternate;
+  }
+
+  @keyframes blobsMove{
+    0%   { transform: translate3d(-40px,-30px,0) scale(1);  }
+    25%  { transform: translate3d(30px,-10px,0) scale(1.08); }
+    50%  { transform: translate3d(40px,30px,0) scale(1.12);  }
+    75%  { transform: translate3d(-20px,20px,0) scale(1.05); }
+    100% { transform: translate3d(-40px,-30px,0) scale(1);  }
+  }
+
+  /* ====== Contenedor principal (encima del fondo) ====== */
+  .wrap{ width:100%; max-width:880px; z-index:1 }
+
+  header{ display:flex; gap:12px; align-items:center; justify-content:space-between; margin-bottom:12px }
+  .header-title{ display:flex; gap:12px; align-items:center }
+  h1{ margin:0; color:var(--neon-a); font-size:20px; letter-spacing:0.6px; text-shadow:0 0 8px rgba(0,234,255,0.08) }
+  .subtitle{ color:var(--muted); font-size:13px }
+
+  /* Botón hamburguesa */
+  .hamburger{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    background:transparent;
+    border:none;
+    cursor:pointer;
+    padding:8px;
+    color:var(--neon-a);
+  }
+  .hamburger span{
+    width:24px;
+    height:2px;
+    background:currentColor;
+    border-radius:2px;
+    transition:all 0.3s ease;
+  }
+  .hamburger.open span:nth-child(1){ transform:rotate(45deg) translateY(11px); }
+  .hamburger.open span:nth-child(2){ opacity:0; }
+  .hamburger.open span:nth-child(3){ transform:rotate(-45deg) translateY(-11px); }
+
+  /* Modal */
+  .modal{
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.6);
+    z-index:999;
+    align-items:center;
+    justify-content:center;
+    animation:fadeIn 0.2s ease;
+  }
+  .modal.show{ display:flex; }
+  @keyframes fadeIn{ from{ opacity:0 } to{ opacity:1 } }
+
+  .modal-content{
+    background:var(--card);
+    border:1px solid rgba(255,255,255,0.05);
+    border-radius:12px;
+    padding:0;
+    max-width:700px;
+    width:90%;
+    box-shadow:0 20px 50px rgba(0,0,0,0.8);
+    animation:slideIn 0.3s ease;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .modal-scroll-area{
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 0 24px;
+  }
+  .modal-content::-webkit-scrollbar{
+    width:8px;
+    height: 8px;
+  }
+  .modal-content::-webkit-scrollbar-track{
+    background: #1a1a20;
+    border-radius:10px;
+  }
+  .modal-content::-webkit-scrollbar-thumb{
+    background-color: var(--neon-a);
+    border-radius:10px;
+    box-shadow: 0 0 5px rgba(0,234,255,0.4);
+  }
+  .modal-scroll-area::-webkit-scrollbar-thumb:hover{
+    background-color: #00ffff;
+  }
+  .modal-scroll-area{
+    scrollbar-width: thin;
+    scrollbar-color: var(--neon-a) #1a1a20;
+  }
+
+  @keyframes slideIn{ from{ transform:translateY(-30px); opacity:0 } to{ transform:translateY(0); opacity:1 } }
+
+  .modal-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.05); padding: 24px 24px 12px 24px; /* <--- AÑADIR PADDING AQUÍ */ flex-shrink: 0;}
+  .modal-header h2{ margin:0; color:var(--neon-a); font-size:18px }
+  .modal-close{ background:transparent; border:none; color:var(--neon-a); font-size:24px; cursor:pointer; padding:0; width:32px; height:32px; display:flex; align-items:center; justify-content:center }
+
+  .modal-section{ margin-bottom:16px }
+  .modal-section h3{ margin:8px 0; color:var(--neon-b); font-size:14px }
+  .modal-section p{ margin:6px 0; color:var(--muted); font-size:13px; line-height:1.5 }
+
+  .modal-footer{ display:flex; gap:8px; margin-top:16px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05); padding: 12px 24px 24px 24px; flex-shrink: 0; }
+  .modal-footer .btn{ flex:1; margin:0 }
+  .modal-overlay{ position:fixed; top:0; left:0; width:100%; height:100%; z-index:-1 }
+
+  .card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border:1px solid rgba(255,255,255,0.02);
+    padding:12px;
+    border-radius:10px;
+    margin-bottom:12px;
+    box-shadow: 0 10px 30px rgba(2,6,23,0.55);
+  }
+
+  /* filas compactas */
+  .row{ display:flex; gap:10px; align-items:center }
+  label{ min-width:110px; color:var(--muted); font-size:13px }
+
+  input, textarea{
+    background: transparent;
+    border:1px solid rgba(255,255,255,0.04);
+    color:inherit;
+    padding:8px 10px;
+    border-radius:8px;
+    font-size:14px;
+    outline:none;
+    flex:1;
+  }
+  textarea{ min-height:72px; resize:vertical }
+
+  /* botones neon */
+  .controls{ display:flex; gap:8px; flex-wrap:wrap }
+  .btn{
+    padding:9px 14px;
+    border-radius:8px;
+    border:1px solid rgba(255,255,255,0.04);
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    color:var(--neon-a);
+    font-weight:700;
+    cursor:pointer;
+    transition: transform .12s ease, box-shadow .18s ease, color .12s;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+  }
+  .btn:active{ transform: translateY(1px) }
+
+  /* Hover: neón con cambio de color y pulso (nota: animación que solo corre mientras hover está activo) */
+  .btn:hover{
+    color:#fff;
+    animation: neonPulseHover 1.6s infinite linear;
+  }
+  @keyframes neonPulseHover{
+    0%   { box-shadow: 0 0 12px rgba(0,234,255,0.18), inset 0 0 10px rgba(0,234,255,0.04); }
+    50%  { box-shadow: 0 0 22px rgba(255,51,212,0.20), inset 0 0 20px rgba(255,51,212,0.04); }
+    100% { box-shadow: 0 0 12px rgba(0,234,255,0.18), inset 0 0 10px rgba(0,234,255,0.04); }
+  }
+
+  .result{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
+    font-size:13px;
+    padding:8px;
+    background: rgba(0,0,0,0.25);
+    border-radius:6px;
+    border:1px solid rgba(255,255,255,0.03);
+    color:#eaf6ff;
+    min-height:36px;
+  }
+
+  /* botones pequeños de icono (copiar) junto a textarea/resultados */
+  .icon-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:38px;
+    height:38px;
+    border-radius:8px;
+    background: rgba(255,255,255,0.02);
+    border:1px solid rgba(255,255,255,0.03);
+    cursor:pointer;
+    color:var(--neon-a);
+    padding:6px;
+  }
+  .icon-btn:active{ transform: translateY(1px) }
+  .icon-btn svg{ width:18px; height:18px; display:block }
+
+  footer{ margin-top:6px; color:var(--muted); font-size:12px }
+
+  /* responsive pequeño */
+  @media (max-width:640px){
+    label{ min-width:80px }
+    h1{ font-size:18px }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="header-title">
+        <h1>DES-CIFRADOR</h1>
+        <div>
+          <div class="subtitle">Cifrado César · Ñ incluido</div>
+          <div class="subtitle" style="font-size:11px; margin-top:2px">Minimalista · Neon · Sin librerías</div>
+        </div>
+      </div>
+      <button class="hamburger" id="hamburgerBtn" title="Menú">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </header>
+
+    <!-- Modal menú -->
+    <div class="modal" id="menuModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Menú</h2>
+          <button class="modal-close" onclick="closeMenu()">✕</button>
+        </div>
+
+        <div class="modal-scroll-area">
+
+        <div class="modal-section">
+          <h3>📋 Acerca de</h3>
+          <p><strong>DES-CIFRADOR</strong> es un proyecto innovador para <strong>mejorar la seguridad de las contraseñas</strong>. Utiliza el cifrado César para encriptar contraseñas obvias y débiles, convirtiéndolas en cadenas más seguras y difíciles de adivinar.</p>
+          <p>Es una herramienta minimalista que encripta y desencripta mensajes usando el algoritmo de cifrado César. Soporta caracteres españoles (Ñ, acentos) y permite convertir resultados a binario y hexadecimal.</p>
+          
+          <p><strong>✨ Características:</strong></p>
+          <ul style="margin:6px 0; padding-left:20px; color:var(--muted); font-size:13px">
+            <li>Cifrado César con soporte Ñ</li>
+            <li>Encriptación de contraseñas débiles</li>
+            <li>Conversión a binario y hexadecimal</li>
+            <li>Detección automática de desplazamiento</li>
+            <li>Copiar resultados al portapapeles</li>
+            <li>100% en navegador, sin servidor</li>
+          </ul>
+
+          <p style="margin-top:12px; padding:10px; background:rgba(255,51,212,0.1); border-left:3px solid var(--neon-b); border-radius:4px">
+            <strong style="color:var(--neon-b)">Hecho con mucho café</strong><br>
+            <span style="font-size:12px; color:var(--muted)">Este proyecto fue desarrollado como parte de un <strong>proyecto de matemáticas</strong> por estudiantes de la <strong>Universidad del Valle de Guatemala</strong>. Una iniciativa académica que combina criptografía, seguridad informática y desarrollo web.</span>
+          </p>
+        </div>
+
+        <div class="modal-section">
+          <h3>Sugerencias y feedback</h3>
+          <p style="margin-top:6px; color:var(--muted); font-size:13px;">
+                ¡Tu opinión nos ayuda a mejorar! Escribe aquí tus ideas, reportes de error o comentarios sobre el proyecto.
+              </p>
+          <p>¿Tienes ideas para mejorar DES-CIFRADOR? Nos encantaría conocerlas:</p>
+          <ul style="margin:6px 0; padding-left:20px; color:var(--muted); font-size:13px">
+            <li>Reporta errores o comportamientos inesperados</li>
+            <li>Sugiere nuevas funcionalidades o cifrados</li>
+            <li>Comparte tus comentarios sobre la interfaz</li>
+            <li>Propón mejoras en rendimiento</li>
+          </ul>
+          <textarea id="sugerenciaTexto" 
+                        placeholder="Escribe tu sugerencia, idea o reporte aquí..." 
+                        style="min-height:100px; margin-top:8px; width:100%;"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="enviarSugerencia()">Enviar Sugerencia</button>
+          <button class="btn" onclick="closeMenu()">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:8px">
+        <label for="texto">Texto</label>
+        <textarea id="texto" placeholder="Escribe mensaje...">Hola mundo Ñ</textarea>
+      </div>
+
+      <div class="row" style="margin-bottom:8px">
+        <label for="desp">Desplazamiento</label>
+        <input id="desp" type="number" value="3" min="-1000" max="1000"/>
+        <div class="controls" style="margin-left:auto">
+          <button class="btn" onclick="cesarEncriptar()">Encriptar</button>
+          <button class="btn" onclick="cesarDesencriptar()">Descifrar</button>
+          <button class="btn" onclick="autoDetect()">Detectar + Descifrar</button>
+          <button class="btn" onclick="limpiarCampos()">Limpiar Todo</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Resultado</label>
+        <div style="flex:1">
+          <div id="salidaCesar" class="result" aria-live="polite">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:8px">
+        <label>Binario</label>
+        <div style="flex:1; display:flex; gap:8px; align-items:flex-start">
+          <textarea id="salidaBin" class="result" readonly placeholder="Binario..."></textarea>
+          <button class="icon-btn" onclick="copyAll('bin', this)" title="Copiar binario" aria-label="Copiar binario">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
+        </div>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <label>Hex</label>
+        <div style="flex:1; display:flex; gap:8px; align-items:flex-start">
+          <textarea id="salidaHex" class="result" readonly placeholder="Hexadecimal..."></textarea>
+          <button class="icon-btn" onclick="copyAll('hex', this)" title="Copiar hex" aria-label="Copiar hex">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="btn" onclick="convertirBinario()">Convertir a Binario</button>
+        <button class="btn" onclick="convertirHex()">Convertir a Hex</button>
+        <button class="btn" onclick="copyAll('cesar', this)">Copiar Resultado</button>
+      </div>
+    </div>
+
+    <footer>Funciona 100% en el navegador. No necesita librerías externas.</footer>
+  </div>
+
+<script>
+/* ===== Lógica César con Ñ (preserva mayúsculas/minúsculas) ===== */
+const AB = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+
+function isLowerCase(ch){
+  return ch >= 'a' && ch <= 'z';
+}
+function shiftChar(ch, shift){
+  if(!ch) return ch;
+  const up = ch.toUpperCase();
+  const idx = AB.indexOf(up);
+  if(idx === -1) return ch; // no está en abecedario
+  const len = AB.length;
+  const n = (idx + (shift % len) + len) % len;
+  const out = AB[n];
+  return isLowerCase(ch) ? out.toLowerCase() : out;
+}
+function cifrar(texto, shift){
+  return Array.from(texto).map(c => shiftChar(c, shift)).join('');
+}
+
+function cesarEncriptar(){
+  const t = document.getElementById('texto').value || '';
+  const d = parseInt(document.getElementById('desp').value) || 0;
+  const r = cifrar(t, d);
+  document.getElementById('salidaCesar').textContent = r;
+}
+function cesarDesencriptar(){
+  const t = document.getElementById('texto').value || '';
+  const d = parseInt(document.getElementById('desp').value) || 0;
+  const r = cifrar(t, -d);
+  document.getElementById('salidaCesar').textContent = r;
+}
+
+/* heurística simple para detectar shift probable */
+function autoDetect(){
+  const t = document.getElementById('texto').value || '';
+  if(!t.trim()) return;
+  let best = {score:-1, shift:0, text:t};
+  for(let s=1; s<=AB.length; s++){
+    const cand = cifrar(t, -s);
+    const score = spanishScore(cand);
+    if(score > best.score){ best = {score, shift:s, text:cand}; }
+  }
+  document.getElementById('salidaCesar').textContent = best.text + '  (shift: ' + best.shift + ')';
+}
+function spanishScore(txt){
+  const words = [' EL ',' LA ',' QUE ',' DE ',' Y ',' EN ',' LOS ',' LAS ',' POR ',' PARA ',' CON ',' NO ',' UN ',' UNA '];
+  const U = (' ' + txt.toUpperCase() + ' ');
+  let s = 0;
+  for(const w of words) if(U.includes(w)) s++;
+  s += (U.match(/[AEIOUÁÉÍÓÚ]/g)||[]).length / 60;
+  return s;
+}
+
+/* BINARIO y HEX */
+function convertirBinario(){
+  const t = document.getElementById('salidaCesar').textContent || document.getElementById('texto').value || '';
+  const out = Array.from(t).map(ch => ch.charCodeAt(0).toString(2).padStart(8,'0')).join(' ');
+  document.getElementById('salidaBin').value = out;
+}
+function convertirHex(){
+  const t = document.getElementById('salidaCesar').textContent || document.getElementById('texto').value || '';
+  const out = Array.from(t).map(ch => ch.charCodeAt(0).toString(16).toUpperCase()).join(' ');
+  document.getElementById('salidaHex').value = out;
+}
+/* Copiar con feedback: acepta 'bin', 'hex' o 'cesar' y el botón que se pulsó (this) */
+const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:limegreen"><path d="M20 6L9 17l-5-5"/></svg>';
+
+function copyAll(type, btn){
+  let txt = '';
+  if(type === 'bin') txt = document.getElementById('salidaBin').value || '';
+  else if(type === 'hex') txt = document.getElementById('salidaHex').value || '';
+  else txt = document.getElementById('salidaCesar').textContent || '';
+  if(!txt) { if(btn) flashBtnText(btn, 'Nada'); return; }
+
+  const doneVisual = (ok)=>{ if(!btn) return; const orig = btn.__origHTML || btn.innerHTML; if(!btn.__origHTML) btn.__origHTML = orig; btn.innerHTML = ICON_CHECK; setTimeout(()=> btn.innerHTML = btn.__origHTML, 1400); };
+
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=> doneVisual(true)).catch(()=> fallbackCopy(txt, btn));
+  } else {
+    fallbackCopy(txt, btn);
+  }
+}
+
+function fallbackCopy(text, btn){
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly','');
+    ta.style.position = 'absolute';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if(ok){ if(btn) { const orig = btn.__origHTML || btn.innerHTML; if(!btn.__origHTML) btn.__origHTML = orig; btn.innerHTML = ICON_CHECK; setTimeout(()=> btn.innerHTML = btn.__origHTML, 1400); } }
+    else { alert('No se pudo copiar'); }
+  }catch(e){ alert('No se pudo copiar: ' + e); }
+}
+
+function flashBtnText(btn, short){ if(!btn) return; const orig = btn.__origHTML || btn.innerHTML; if(!btn.__origHTML) btn.__origHTML = orig; btn.innerHTML = short; setTimeout(()=> btn.innerHTML = btn.__origHTML, 900); }
+
+/* iniciar con ejemplo */
+document.addEventListener('DOMContentLoaded', ()=>{ 
+  cesarEncriptar();
+  /* Menú hamburguesa */
+  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
+  document.getElementById('menuModal').addEventListener('click', (e)=>{ if(e.target.id==='menuModal') closeMenu(); });
+});
+
+function toggleMenu(){
+  const modal = document.getElementById('menuModal');
+  const btn = document.getElementById('hamburgerBtn');
+  modal.classList.toggle('show');
+  btn.classList.toggle('open');
+}
+
+function closeMenu(){
+  const modal = document.getElementById('menuModal');
+  const btn = document.getElementById('hamburgerBtn');
+  modal.classList.remove('show');
+  btn.classList.remove('open');
+}
+
+/* ===== FUNCIÓN PARA ENVIAR SUGERENCIA ===== */
+function enviarSugerencia(){
+    const sugerencia = document.getElementById('sugerenciaTexto').value.trim();
+    if(sugerencia.length === 0){
+        alert('Por favor, escribe tu sugerencia antes de enviarla.');
+        return;
+    }
+    
+    // Aquí se simula el envío (puedes reemplazar esto con tu lógica de backend real)
+    alert('¡Sugerencia enviada con éxito! (Mensaje: "' + sugerencia.substring(0, 30) + '...")');
+    
+    // Limpiar el campo y cerrar el menú
+    document.getElementById('sugerenciaTexto').value = '';
+    closeMenu();
+}
+/* ===== FUNCIÓN DE LIMPIEZA ===== */
+function limpiarCampos(){
+    // 1. Limpiar el texto de entrada principal y el desplazamiento
+    document.getElementById('texto').value = '';
+    document.getElementById('desp').value = '3'; // Deja el desplazamiento en 3 como valor por defecto
+
+    // 2. Limpiar los resultados
+    document.getElementById('salidaCesar').textContent = '--';
+    document.getElementById('salidaBin').value = '';
+    document.getElementById('salidaHex').value = '';
+
+    // Opcional: enfocar el campo de texto para que el usuario pueda empezar de nuevo
+    document.getElementById('texto').focus();
+}
+
+/* Cerrar modal al presionar Escape */
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMenu(); });
+</script>
+</body>
+</html>
